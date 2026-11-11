@@ -1,0 +1,88 @@
+{{- $name := "api" -}}
+{{- $secret := .Values.api.signingKeySecret | default "opslab-api-signing-key" -}}
+{{- if not .Values.api.signingKeySecret }}
+{{- /* Keep the generated key across upgrades: tokens and the gateway's keys stay valid. */}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $secret }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secret }}
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+type: Opaque
+data:
+  {{- if $existing }}
+  key.pem: {{ index $existing.data "key.pem" }}
+  {{- else }}
+  key.pem: {{ genPrivateKey "ed25519" | b64enc }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opslab-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ include "opslab.replicas" . }}
+  selector:
+    matchLabels: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "opslab.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      securityContext: {{- include "opslab.podSecurityContext" . | nindent 8 }}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      automountServiceAccountToken: false
+      initContainers:
+        # The web image only carries the built UI: copy it next to the api.
+        - name: web
+          image: {{ include "opslab.image" (dict "root" . "name" "web") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: [cp, -r, /dist/., /web/]
+          volumeMounts:
+            - {name: web, mountPath: /web}
+          securityContext: {{- include "opslab.containerSecurityContext" . | nindent 12 }}
+      containers:
+        - name: api
+          image: {{ include "opslab.image" (dict "root" . "name" $name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: OPSLAB_LISTEN, value: "0.0.0.0:8080"}
+            - {name: OPSLAB_WEB_DIR, value: /web}
+            - {name: OPSLAB_SIGNING_KEY_FILE, value: /etc/opslab/signing-key/key.pem}
+            - {name: OPSLAB_LOG_FORMAT, value: json}
+          ports:
+            - {name: http, containerPort: 8080}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          readinessProbe:
+            httpGet: {path: /healthz, port: http}
+          volumeMounts:
+            - {name: web, mountPath: /web, readOnly: true}
+            - {name: signing-key, mountPath: /etc/opslab/signing-key, readOnly: true}
+          securityContext: {{- include "opslab.containerSecurityContext" . | nindent 12 }}
+          resources: {{- toYaml .Values.api.resources | nindent 12 }}
+      volumes:
+        - name: web
+          emptyDir: {}
+        - name: signing-key
+          secret:
+            secretName: {{ $secret }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opslab-api
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 4 }}
+  ports:
+    - {name: http, port: {{ .Values.api.service.port }}, targetPort: http}

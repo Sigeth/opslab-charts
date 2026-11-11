@@ -1,0 +1,3 @@
+{{- if not (has .Values.profile (list "single" "cluster")) }}
+{{- fail (printf "profile must be single or cluster, got %q" .Values.profile) }}
+{{- end }}

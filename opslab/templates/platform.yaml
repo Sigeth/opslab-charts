@@ -1,0 +1,23 @@
+{{- if .Values.instancesNamespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.instancesNamespace.name }}
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+    # Instance pods run student workloads: enforce the restricted standard.
+    pod-security.kubernetes.io/enforce: restricted
+---
+{{- end }}
+apiVersion: opslab.io/v1alpha1
+kind: PlatformConfig
+metadata:
+  name: default
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.platform.allowedRuntimes }}
+  allowedRuntimes: {{ toYaml . | nindent 4 }}
+  {{- end }}
+  allowedEgress: {{ .Values.platform.allowedEgress }}
+  maxInstanceLifetime: {{ .Values.platform.maxInstanceLifetime }}

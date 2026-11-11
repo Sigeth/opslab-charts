@@ -1,0 +1,51 @@
+{{- $name := "gateway" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opslab-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ include "opslab.replicas" . }}
+  selector:
+    matchLabels: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "opslab.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      securityContext: {{- include "opslab.podSecurityContext" . | nindent 8 }}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      automountServiceAccountToken: false
+      containers:
+        - name: gateway
+          image: {{ include "opslab.image" (dict "root" . "name" $name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: OPSLAB_LISTEN, value: "0.0.0.0:8081"}
+            - name: OPSLAB_JWKS_URL
+              value: http://opslab-api.{{ .Release.Namespace }}.svc:{{ .Values.api.service.port }}/.well-known/jwks.json
+            - {name: OPSLAB_LOG_FORMAT, value: json}
+          ports:
+            - {name: http, containerPort: 8081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+          securityContext: {{- include "opslab.containerSecurityContext" . | nindent 12 }}
+          resources: {{- toYaml .Values.gateway.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opslab-gateway
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 4 }}
+  ports:
+    - {name: http, port: {{ .Values.gateway.service.port }}, targetPort: http}

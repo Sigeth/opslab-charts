@@ -1,0 +1,104 @@
+{{- $name := "operator" -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opslab-operator
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+---
+# Rules generated from the operator's +kubebuilder:rbac markers (files/operator-role.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opslab-operator
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  {{- (.Files.Get "files/operator-role.yaml" | fromYaml).rules | toYaml | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opslab-operator
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opslab-operator
+subjects:
+  - kind: ServiceAccount
+    name: opslab-operator
+    namespace: {{ .Release.Namespace }}
+---
+{{- if eq .Values.profile "cluster" }}
+# Leader election (several replicas).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opslab-operator-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opslab-operator-leader-election
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: opslab-operator-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: opslab-operator
+    namespace: {{ .Release.Namespace }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opslab-operator
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  replicas: {{ include "opslab.replicas" . }}
+  selector:
+    matchLabels: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "opslab.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      serviceAccountName: opslab-operator
+      securityContext: {{- include "opslab.podSecurityContext" . | nindent 8 }}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      containers:
+        - name: operator
+          image: {{ include "opslab.image" (dict "root" . "name" $name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args:
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+            {{- if eq .Values.profile "cluster" }}
+            - --leader-elect
+            {{- end }}
+          ports:
+            - {name: metrics, containerPort: 8080}
+            - {name: probes, containerPort: 8081}
+          livenessProbe:
+            httpGet: {path: /healthz, port: probes}
+          readinessProbe:
+            httpGet: {path: /readyz, port: probes}
+          securityContext: {{- include "opslab.containerSecurityContext" . | nindent 12 }}
+          resources: {{- toYaml .Values.operator.resources | nindent 12 }}

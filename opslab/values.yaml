@@ -1,0 +1,51 @@
+# single: one Linux machine (one replica of everything).
+# cluster: several nodes (two replicas of the stateless services, leader election).
+profile: single
+
+image:
+  registry: ghcr.io/sigeth
+  # Defaults to the chart appVersion.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Namespace holding ChallengeInstances, CheckRuns and instance resources.
+instancesNamespace:
+  name: opslab-instances
+  create: true
+
+# Cluster-wide policy (the PlatformConfig named "default").
+platform:
+  allowedRuntimes: []
+  allowedEgress: none
+  maxInstanceLifetime: 4h
+
+operator:
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+
+api:
+  # Existing Secret with a PKCS#8 PEM Ed25519 key under "key.pem". When empty,
+  # the chart generates one and keeps it across upgrades.
+  signingKeySecret: ""
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  service:
+    port: 8080
+
+gateway:
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 256Mi}
+  service:
+    port: 8081
+
+# Gateway API routes (requires a Gateway, e.g. Traefik on k3s).
+httpRoute:
+  enabled: false
+  parentRefs: []
+  # Platform UI and api, e.g. opslab.example.org
+  hostname: ""
+  # Gateway (terminals), e.g. gw.opslab.example.org
+  gatewayHostname: ""
