@@ -75,6 +75,9 @@ solo:
 # (api.databaseSecret).
 postgres:
   enabled: true
+  # Existing Secret with "password" and "url" (the api's connection URL)
+  # instead of a generated one.
+  existingSecret: ""
   image: docker.io/library/postgres:18
   storage: 2Gi
   storageClass: ""

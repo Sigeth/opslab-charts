@@ -1,5 +1,7 @@
 {{- if .Values.postgres.enabled }}
 {{- $name := "postgres" -}}
+{{- $secret := .Values.postgres.existingSecret | default "opslab-postgres" }}
+{{- if not .Values.postgres.existingSecret }}
 {{- /* Keep the generated password across upgrades. */}}
 {{- $existing := lookup "v1" "Secret" .Release.Namespace "opslab-postgres" }}
 {{- $password := "" }}
@@ -20,6 +22,7 @@ stringData:
   # Read by the api (OPSLAB_DATABASE_URL_FILE).
   url: {{ printf "postgres://opslab:%s@opslab-postgres.%s.svc:5432/opslab" $password .Release.Namespace | quote }}
 ---
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -71,7 +74,7 @@ spec:
             - {name: POSTGRES_DB, value: opslab}
             - name: POSTGRES_PASSWORD
               valueFrom:
-                secretKeyRef: {name: opslab-postgres, key: password}
+                secretKeyRef: {name: {{ $secret }}, key: password}
             - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
           ports:
             - {name: postgres, containerPort: 5432}

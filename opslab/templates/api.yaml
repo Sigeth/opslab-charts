@@ -107,7 +107,7 @@ spec:
             secretName: {{ $secret }}
         - name: database
           secret:
-            secretName: {{ .Values.api.databaseSecret | default "opslab-postgres" }}
+            secretName: {{ .Values.api.databaseSecret | default .Values.postgres.existingSecret | default "opslab-postgres" }}
             items: [{key: url, path: url}]
         - name: solo
           secret:
