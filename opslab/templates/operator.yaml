@@ -90,9 +90,15 @@ spec:
           args:
             - --metrics-bind-address=:8080
             - --health-probe-bind-address=:8081
+            - --checker-image={{ .Values.operator.checkerImage | default (include "opslab.image" (dict "root" . "name" "checker")) }}
+            - --gateway-service-account={{ .Release.Namespace }}/opslab-gateway
             {{- if eq .Values.profile "cluster" }}
             - --leader-elect
             {{- end }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: {fieldPath: metadata.namespace}
           ports:
             - {name: metrics, containerPort: 8080}
             - {name: probes, containerPort: 8081}

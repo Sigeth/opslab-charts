@@ -1,0 +1,119 @@
+# Least privilege per component (architecture §11).
+#
+# api: reads installed challenges and package files, manages instances and
+# check runs. gateway: reads instances. The operator binds the *-exec roles in
+# each instance namespace only, so the gateway (terminals) and the checker
+# can exec into the machines of an instance and nowhere else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opslab-api
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opslab-api
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [opslab.io]
+    resources: [challenges]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opslab-api
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: opslab-api}
+subjects:
+  - {kind: ServiceAccount, name: opslab-api, namespace: {{ .Release.Namespace }}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opslab-api
+  namespace: {{ .Values.instancesNamespace.name }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [opslab.io]
+    resources: [challengeinstances, checkruns]
+    verbs: [get, list, watch, create, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opslab-api
+  namespace: {{ .Values.instancesNamespace.name }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: opslab-api}
+subjects:
+  - {kind: ServiceAccount, name: opslab-api, namespace: {{ .Release.Namespace }}}
+---
+# Inline package files (instructions) live next to the platform.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opslab-api-packages
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opslab-api-packages
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: opslab-api-packages}
+subjects:
+  - {kind: ServiceAccount, name: opslab-api, namespace: {{ .Release.Namespace }}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opslab-gateway
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opslab-gateway
+  namespace: {{ .Values.instancesNamespace.name }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [opslab.io]
+    resources: [challengeinstances]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opslab-gateway
+  namespace: {{ .Values.instancesNamespace.name }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: opslab-gateway}
+subjects:
+  - {kind: ServiceAccount, name: opslab-gateway, namespace: {{ .Release.Namespace }}}
+---
+{{- range $who := list "gateway" "checker" }}
+# Bound by the operator in each instance namespace.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opslab-{{ $who }}-exec
+  labels: {{- include "opslab.labels" $ | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create, get]
+---
+{{- end }}

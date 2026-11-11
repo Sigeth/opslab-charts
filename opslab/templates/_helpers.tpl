@@ -33,3 +33,23 @@ readOnlyRootFilesystem: true
 capabilities:
   drop: [ALL]
 {{- end }}
+
+{{/* Public URL of the gateway, for browsers. */}}
+{{- define "opslab.gatewayURL" -}}
+{{- if .Values.gateway.publicURL -}}
+{{ .Values.gateway.publicURL }}
+{{- else if .Values.httpRoute.gatewayHostname -}}
+https://{{ .Values.httpRoute.gatewayHostname }}
+{{- else -}}
+http://localhost:8081
+{{- end -}}
+{{- end }}
+
+{{/* Origins allowed to change state with the session cookie (CSRF). */}}
+{{- define "opslab.allowedOrigins" -}}
+{{- if .Values.api.allowedOrigins -}}
+{{ join "," .Values.api.allowedOrigins }}
+{{- else if .Values.httpRoute.hostname -}}
+https://{{ .Values.httpRoute.hostname }}
+{{- end -}}
+{{- end }}

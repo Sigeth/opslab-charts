@@ -17,10 +17,10 @@ spec:
         {{- include "opslab.labels" . | nindent 8 }}
         app.kubernetes.io/name: {{ $name }}
     spec:
+      serviceAccountName: opslab-gateway
       securityContext: {{- include "opslab.podSecurityContext" . | nindent 8 }}
       nodeSelector:
         kubernetes.io/arch: amd64
-      automountServiceAccountToken: false
       containers:
         - name: gateway
           image: {{ include "opslab.image" (dict "root" . "name" $name) }}

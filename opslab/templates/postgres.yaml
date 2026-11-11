@@ -1,0 +1,101 @@
+{{- if .Values.postgres.enabled }}
+{{- $name := "postgres" -}}
+{{- /* Keep the generated password across upgrades. */}}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace "opslab-postgres" }}
+{{- $password := "" }}
+{{- if $existing }}
+{{- $password = index $existing.data "password" | b64dec }}
+{{- else }}
+{{- $password = randAlphaNum 32 }}
+{{- end }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opslab-postgres
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  password: {{ $password | quote }}
+  # Read by the api (OPSLAB_DATABASE_URL_FILE).
+  url: {{ printf "postgres://opslab:%s@opslab-postgres.%s.svc:5432/opslab" $password .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opslab-postgres
+  namespace: {{ .Release.Namespace }}
+  labels: {{- include "opslab.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 4 }}
+  ports:
+    - {name: postgres, port: 5432, targetPort: postgres}
+---
+# Single PostgreSQL pod (single profile). Use CloudNativePG or an external
+# database for HA (postgres.enabled=false, api.databaseSecret).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opslab-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opslab.labels" . | nindent 4 }}
+    app.kubernetes.io/name: {{ $name }}
+spec:
+  serviceName: opslab-postgres
+  replicas: 1
+  selector:
+    matchLabels: {{- include "opslab.selector" (dict "root" . "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "opslab.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ $name }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - {name: POSTGRES_USER, value: opslab}
+            - {name: POSTGRES_DB, value: opslab}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: opslab-postgres, key: password}
+            - {name: PGDATA, value: /var/lib/postgresql/data/pgdata}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, opslab, -d, opslab]
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+            - {name: run, mountPath: /var/run/postgresql}
+            - {name: tmp, mountPath: /tmp}
+          securityContext: {{- include "opslab.containerSecurityContext" . | nindent 12 }}
+          resources: {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - {name: run, emptyDir: {}}
+        - {name: tmp, emptyDir: {}}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.postgres.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage }}
+{{- end }}

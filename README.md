@@ -1,8 +1,8 @@
 # opslab-charts
 
-Helm chart of opslab (working name): the operator, the api (which also serves the web UI) and the gateway, plus the CRDs and the cluster-wide `PlatformConfig`.
+Helm chart of opslab (working name): the operator, the api (which also serves the web UI), the gateway and PostgreSQL, plus the CRDs, the RBAC of each component and the cluster-wide `PlatformConfig`.
 
-> Status: M0. The chart renders and validates against a real API server. The images are published from M1.
+> Status: M1. Single-machine profile with a PostgreSQL pod; the cluster profile adds replicas and leader election.
 
 ## Install
 
@@ -18,9 +18,27 @@ helm install opslab ./opslab --namespace opslab-system --create-namespace --set 
 | `instancesNamespace.name` | `opslab-instances` | Namespace of student instances (Pod Security `restricted`) |
 | `platform.*` | | Cluster-wide policy (`PlatformConfig`) |
 | `api.signingKeySecret` | generated | Secret holding the Ed25519 access token key (`key.pem`) |
+| `api.allowedOrigins` | `https://<httpRoute.hostname>` | Origins allowed to change state with the session cookie (CSRF) |
+| `gateway.publicURL` | `https://<httpRoute.gatewayHostname>` | Gateway URL as browsers reach it (terminals) |
+| `operator.checkerImage` | `<image.registry>/opslab-checker:<tag>` | Built-in checker |
+| `solo.username` / `solo.passwordSecret` | `admin` / generated | Solo mode account. The generated password is in the `opslab-solo` Secret. |
+| `postgres.enabled` | `true` | Single PostgreSQL pod with a PVC. Set `false` and `api.databaseSecret` (key `url`) for an external database. |
 | `httpRoute.*` | disabled | Gateway API routes for the UI/api and the gateway |
 
-The api's access token key is generated at install time and kept across upgrades.
+The api's access token key, the PostgreSQL password and the solo password are generated at install time and kept across upgrades. Read the solo password with:
+
+```sh
+kubectl -n opslab-system get secret opslab-solo -o jsonpath='{.data.password}' | base64 -d
+```
+
+## Permissions
+
+| Component | Access |
+|---|---|
+| api | Read `Challenge`s, manage `ChallengeInstance`s and `CheckRun`s in the instances namespace, read ConfigMaps of the release namespace (inline package files) |
+| gateway | Read `ChallengeInstance`s. `pods/exec` in instance namespaces only, through the `opslab-gateway-exec` ClusterRole the operator binds there. |
+| checker | `pods/exec` in its instance namespace only (`opslab-checker-exec`, bound by the operator) |
+| operator | Generated from its RBAC markers (`files/operator-role.yaml`) |
 
 ## Files synced from other repositories
 

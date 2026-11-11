@@ -20,6 +20,8 @@ platform:
   maxInstanceLifetime: 4h
 
 operator:
+  # Built-in checker image. Defaults to <image.registry>/opslab-checker:<tag>.
+  checkerImage: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {memory: 256Mi}
@@ -28,6 +30,14 @@ api:
   # Existing Secret with a PKCS#8 PEM Ed25519 key under "key.pem". When empty,
   # the chart generates one and keeps it across upgrades.
   signingKeySecret: ""
+  # Existing Secret with the PostgreSQL URL under "url". Required when
+  # postgres.enabled is false.
+  databaseSecret: ""
+  # Origins allowed to send state-changing requests (CSRF protection), e.g.
+  # https://opslab.example.org. Defaults to https://<httpRoute.hostname>.
+  allowedOrigins: []
+  # Session cookies over HTTPS only (browsers accept them on http://localhost).
+  cookieSecure: true
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {memory: 256Mi}
@@ -35,6 +45,9 @@ api:
     port: 8080
 
 gateway:
+  # Public URL of the gateway, as browsers reach it. Defaults to
+  # https://<httpRoute.gatewayHostname>.
+  publicURL: ""
   resources:
     requests: {cpu: 50m, memory: 64Mi}
     limits: {memory: 256Mi}
@@ -49,3 +62,22 @@ httpRoute:
   hostname: ""
   # Gateway (terminals), e.g. gw.opslab.example.org
   gatewayHostname: ""
+
+# Solo mode: one local account for an individual running opslab for
+# themselves. The password is generated at install time and kept across
+# upgrades (Secret opslab-solo, key "password"), unless passwordSecret names
+# an existing Secret with a "password" key.
+solo:
+  username: admin
+  passwordSecret: ""
+
+# Single PostgreSQL pod. Disable it to use an external database
+# (api.databaseSecret).
+postgres:
+  enabled: true
+  image: docker.io/library/postgres:18
+  storage: 2Gi
+  storageClass: ""
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 512Mi}
