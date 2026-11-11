@@ -4,6 +4,8 @@ Helm chart of opslab (working name): the operator, the api (which also serves th
 
 > Status: M1. Single-machine profile with a PostgreSQL pod; the cluster profile adds replicas and leader election.
 
+The chart's `appVersion` is the platform release: every component image is `ghcr.io/sigeth/opslab-<component>:v<appVersion>`, published by each component's `release` workflow when it is tagged.
+
 ## Install
 
 ```sh
