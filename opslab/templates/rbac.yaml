@@ -115,5 +115,12 @@ rules:
   - apiGroups: [""]
     resources: [pods/exec]
     verbs: [create, get]
+  {{- if eq $who "gateway" }}
+  # The student's key and the host keys, for SSH terminals on vm machines.
+  - apiGroups: [""]
+    resources: [secrets]
+    resourceNames: [opslab-ssh]
+    verbs: [get]
+  {{- end }}
 ---
 {{- end }}
