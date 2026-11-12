@@ -92,6 +92,8 @@ spec:
             - --health-probe-bind-address=:8081
             - --checker-image={{ .Values.operator.checkerImage | default (include "opslab.image" (dict "root" . "name" "checker")) }}
             - --gateway-service-account={{ .Release.Namespace }}/opslab-gateway
+            # Its own pods, let into instances with vm machines over SSH (setup).
+            - --operator-pod-labels=app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/name={{ $name }}
             {{- if eq .Values.profile "cluster" }}
             - --leader-elect
             {{- end }}
